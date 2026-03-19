@@ -1,35 +1,97 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LedgerPro - Kế toán</title>
+    <title>LedgerPro - Double Entry Accounting</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        :root { --primary: #2c3e50; --success: #27ae60; --danger: #e74c3c; }
-        body { background: #f8f9fa; margin: 0; }
-        .sidebar { background: var(--primary); min-height: 100vh; width: 220px; color: white; padding: 20px; position: fixed; }
-        .sidebar h4 { color: white; margin-bottom: 30px; }
-        .sidebar a { color: rgba(255,255,255,0.8); text-decoration: none; display: block; padding: 12px; border-radius: 8px; margin-bottom: 5px; }
-        .sidebar a:hover, .sidebar a.active { color: white; background: rgba(255,255,255,0.1); }
-        .main { margin-left: 220px; padding: 30px; }
-        .card-stat { border: none; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-        .table-container { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        :root {
+            --primary: #2c3e50;
+            --success: #27ae60;
+            --danger: #e74c3c;
+        }
+
+        body {
+            background: #f8f9fa;
+            margin: 0;
+        }
+
+        .sidebar {
+            background: var(--primary);
+            min-height: 100vh;
+            width: 220px;
+            color: white;
+            padding: 20px;
+            position: fixed;
+        }
+
+        .sidebar h4 {
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .sidebar a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            display: block;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+        }
+
+        .sidebar a:hover,
+        .sidebar a.active {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .main {
+            margin-left: 220px;
+            padding: 30px;
+        }
+
+        .card-stat {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
         .badge-asset { background: #3498db; }
         .badge-liability { background: #e74c3c; }
         .badge-equity { background: #27ae60; }
         .badge-revenue { background: #9b59b6; }
         .badge-expense { background: #f39c12; }
+
+        .lang-toggle {
+            position: fixed;
+            top: 15px;
+            right: 20px;
+            z-index: 1000;
+        }
     </style>
 </head>
+
 <body>
+    <div class="lang-toggle btn-group">
+        <button type="button" class="btn btn-sm btn-outline-light" id="lang-vi">VI</button>
+        <button type="button" class="btn btn-sm btn-outline-light" id="lang-en">EN</button>
+    </div>
+
     <nav class="sidebar">
         <h4><i class="bi bi-journal-check"></i> LedgerPro</h4>
-        <a href="#/" id="nav-dashboard"><i class="bi bi-house"></i> Bảng điều khiển</a>
-        <a href="#/accounts" id="nav-accounts"><i class="bi bi-wallet2"></i> Tài khoản</a>
-        <a href="#/journal" id="nav-journal"><i class="bi bi-journal-text"></i> Nhật ký</a>
-        <a href="#/reports" id="nav-reports"><i class="bi bi-bar-chart"></i> Báo cáo</a>
+        <a href="#/" id="nav-dashboard"><i class="bi bi-house"></i> <span data-i18n="dashboard">Bảng điều khiển</span></a>
+        <a href="#/accounts" id="nav-accounts"><i class="bi bi-wallet2"></i> <span data-i18n="accounts">Tài khoản</span></a>
+        <a href="#/journal" id="nav-journal"><i class="bi bi-journal-text"></i> <span data-i18n="journal">Nhật ký</span></a>
+        <a href="#/reports" id="nav-reports"><i class="bi bi-bar-chart"></i> <span data-i18n="reports">Báo cáo</span></a>
     </nav>
 
     <main class="main" id="app">
@@ -43,7 +105,107 @@
     <script>
         const API = '/api';
         const VND = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
-        const fmtDate = d => new Date(d).toLocaleDateString('vi-VN');
+        const fmtDate = d => new Date(d).toLocaleDateString(localStorage.getItem('lang') || 'vi');
+
+        const i18n = {
+            vi: {
+                dashboard: 'Bảng điều khiển',
+                accounts: 'Tài khoản',
+                journal: 'Nhật ký',
+                reports: 'Báo cáo',
+                totalAssets: 'Tổng Tài sản',
+                totalLiabilities: 'Tổng Nợ',
+                totalEquity: 'Tổng Vốn',
+                recentEntries: 'Phiếu gần đây',
+                date: 'Ngày',
+                entryNumber: 'Số phiếu',
+                description: 'Mô tả',
+                status: 'Trạng thái',
+                posted: 'Đã ghi',
+                draft: 'Nháp',
+                noEntries: 'Chưa có phiếu',
+                accountList: 'Danh sách Tài khoản',
+                code: 'Mã',
+                name: 'Tên',
+                type: 'Loại',
+                journalEntries: 'Nhật ký Phiếu',
+                reference: 'Tham chiếu',
+                financialReports: 'Báo cáo Tài chính',
+                balanceSheet: 'Bảng Cân đối',
+                trialBalance: 'Bảng Thử',
+                assets: 'Tài sản',
+                liabilities: 'Nợ phải trả',
+                equity: 'Vốn chủ sở hữu',
+                total: 'Tổng',
+                debit: 'Nợ',
+                credit: 'Có',
+                totalDebits: 'Tổng Nợ',
+                totalCredits: 'Tổng Có',
+                balanced: 'Cân bằng',
+                notBalanced: 'Không cân bằng',
+                error: 'Lỗi'
+            },
+            en: {
+                dashboard: 'Dashboard',
+                accounts: 'Accounts',
+                journal: 'Journal',
+                reports: 'Reports',
+                totalAssets: 'Total Assets',
+                totalLiabilities: 'Total Liabilities',
+                totalEquity: 'Total Equity',
+                recentEntries: 'Recent Entries',
+                date: 'Date',
+                entryNumber: 'Entry #',
+                description: 'Description',
+                status: 'Status',
+                posted: 'Posted',
+                draft: 'Draft',
+                noEntries: 'No entries yet',
+                accountList: 'Chart of Accounts',
+                code: 'Code',
+                name: 'Name',
+                type: 'Type',
+                journalEntries: 'Journal Entries',
+                reference: 'Reference',
+                financialReports: 'Financial Reports',
+                balanceSheet: 'Balance Sheet',
+                trialBalance: 'Trial Balance',
+                assets: 'Assets',
+                liabilities: 'Liabilities',
+                equity: 'Equity',
+                total: 'Total',
+                debit: 'Debit',
+                credit: 'Credit',
+                totalDebits: 'Total Debits',
+                totalCredits: 'Total Credits',
+                balanced: 'Balanced',
+                notBalanced: 'Not Balanced',
+                error: 'Error'
+            }
+        };
+
+        let currentLang = localStorage.getItem('lang') || 'vi';
+
+        function t(key) {
+            return i18n[currentLang][key] || key;
+        }
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('lang', lang);
+            document.documentElement.lang = lang;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                el.textContent = t(el.dataset.i18n);
+            });
+            document.getElementById('lang-vi').classList.toggle('active', lang === 'vi');
+            document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+            if (routes[location.hash.replace('#', '') || '/']) {
+                routes[location.hash.replace('#', '') || '/']();
+            }
+        }
+
+        document.getElementById('lang-vi').addEventListener('click', () => setLanguage('vi'));
+        document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 
         const routes = {
             '/': loadDashboard,
@@ -55,58 +217,61 @@
         function navigate(hash) {
             const path = hash.replace('#', '') || '/';
             document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
-            const nav = document.getElementById('nav-' + path.slice(1) || 'dashboard');
+            const navId = 'nav-' + (path.slice(1) || 'dashboard');
+            const nav = document.getElementById(navId);
             if (nav) nav.classList.add('active');
             if (routes[path]) routes[path]();
         }
 
         window.addEventListener('hashchange', () => navigate(location.hash));
-        window.addEventListener('load', () => navigate(location.hash || '#/'));
+        window.addEventListener('load', () => {
+            setLanguage(currentLang);
+            navigate(location.hash || '#/');
+        });
 
         async function loadDashboard() {
             const app = document.getElementById('app');
             try {
-                const [bsRes, entriesRes, accountsRes] = await Promise.all([
+                const [bsRes, entriesRes] = await Promise.all([
                     axios.get(API + '/reports/balance-sheet'),
-                    axios.get(API + '/journal-entries'),
-                    axios.get(API + '/accounts')
+                    axios.get(API + '/journal-entries')
                 ]);
 
                 const bs = bsRes.data;
                 app.innerHTML = `
-                    <h2 class="mb-4">Bảng điều khiển</h2>
+                    <h2 class="mb-4" data-i18n="dashboard">${t('dashboard')}</h2>
                     <div class="row mb-4">
                         <div class="col-md-4"><div class="card card-stat p-4">
-                            <h6 class="text-muted">Tổng Tài sản</h6>
+                            <h6 class="text-muted">${t('totalAssets')}</h6>
                             <h3 class="text-primary">${VND.format(bs.assets.total)}</h3>
                         </div></div>
                         <div class="col-md-4"><div class="card card-stat p-4">
-                            <h6 class="text-muted">Tổng Nợ</h6>
+                            <h6 class="text-muted">${t('totalLiabilities')}</h6>
                             <h3 class="text-danger">${VND.format(bs.liabilities.total)}</h3>
                         </div></div>
                         <div class="col-md-4"><div class="card card-stat p-4">
-                            <h6 class="text-muted">Tổng Vốn</h6>
+                            <h6 class="text-muted">${t('totalEquity')}</h6>
                             <h3 class="text-success">${VND.format(bs.equity.total)}</h3>
                         </div></div>
                     </div>
                     <div class="table-container p-4">
-                        <h5 class="mb-3">Phiếu gần đây</h5>
+                        <h5 class="mb-3" data-i18n="recentEntries">${t('recentEntries')}</h5>
                         ${entriesRes.data.entries.length ? `
                         <table class="table">
-                            <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Mô tả</th><th>Trạng thái</th></tr></thead>
+                            <thead><tr><th data-i18n="date">${t('date')}</th><th data-i18n="entryNumber">${t('entryNumber')}</th><th data-i18n="description">${t('description')}</th><th data-i18n="status">${t('status')}</th></tr></thead>
                             <tbody>
                                 ${entriesRes.data.entries.slice(0, 5).map(e => `
                                 <tr>
                                     <td>${fmtDate(e.date)}</td>
                                     <td>${e.entry_number}</td>
                                     <td>${e.description}</td>
-                                    <td><span class="badge ${e.is_posted ? 'bg-success' : 'bg-warning'}">${e.is_posted ? 'Đã ghi' : 'Nháp'}</span></td>
+                                    <td><span class="badge ${e.is_posted ? 'bg-success' : 'bg-warning'}">${e.is_posted ? t('posted') : t('draft')}</span></td>
                                 </tr>`).join('')}
                             </tbody>
-                        </table>` : '<p class="text-muted">Chưa có phiếu</p>'}
+                        </table>` : `<p class="text-muted">${t('noEntries')}</p>`}
                     </div>`;
             } catch (e) {
-                app.innerHTML = `<div class="alert alert-danger">Lỗi: ${e.message}</div>`;
+                app.innerHTML = `<div class="alert alert-danger">${t('error')}: ${e.message}</div>`;
             }
         }
 
@@ -115,17 +280,14 @@
             try {
                 const res = await axios.get(API + '/accounts');
                 const accounts = res.data;
-                
-                const byType = { asset: [], liability: [], equity: [], revenue: [], expense: [] };
-                accounts.forEach(a => byType[a.account_type]?.push(a));
-                
+
                 app.innerHTML = `
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>Danh sách Tài khoản</h2>
+                        <h2 data-i18n="accountList">${t('accountList')}</h2>
                     </div>
                     <div class="table-container p-4">
                         <table class="table">
-                            <thead><tr><th>Mã</th><th>Tên</th><th>Loại</th></tr></thead>
+                            <thead><tr><th data-i18n="code">${t('code')}</th><th data-i18n="name">${t('name')}</th><th data-i18n="type">${t('type')}</th></tr></thead>
                             <tbody>
                                 ${accounts.map(a => `
                                 <tr>
@@ -137,7 +299,7 @@
                         </table>
                     </div>`;
             } catch (e) {
-                app.innerHTML = `<div class="alert alert-danger">Lỗi: ${e.message}</div>`;
+                app.innerHTML = `<div class="alert alert-danger">${t('error')}: ${e.message}</div>`;
             }
         }
 
@@ -146,13 +308,13 @@
             try {
                 const res = await axios.get(API + '/journal-entries');
                 const entries = res.data.entries || [];
-                
+
                 app.innerHTML = `
-                    <h2 class="mb-4">Nhật ký Phiếu</h2>
+                    <h2 class="mb-4" data-i18n="journalEntries">${t('journalEntries')}</h2>
                     <div class="table-container p-4">
                         ${entries.length ? `
                         <table class="table">
-                            <thead><tr><th>Ngày</th><th>Số phiếu</th><th>Mô tả</th><th>Tham chiếu</th><th>Trạng thái</th></tr></thead>
+                            <thead><tr><th data-i18n="date">${t('date')}</th><th data-i18n="entryNumber">${t('entryNumber')}</th><th data-i18n="description">${t('description')}</th><th data-i18n="reference">${t('reference')}</th><th data-i18n="status">${t('status')}</th></tr></thead>
                             <tbody>
                                 ${entries.map(e => `
                                 <tr>
@@ -160,28 +322,28 @@
                                     <td>${e.entry_number}</td>
                                     <td>${e.description}</td>
                                     <td>${e.reference || '-'}</td>
-                                    <td><span class="badge ${e.is_posted ? 'bg-success' : 'bg-warning'}">${e.is_posted ? 'Đã ghi' : 'Nháp'}</span></td>
+                                    <td><span class="badge ${e.is_posted ? 'bg-success' : 'bg-warning'}">${e.is_posted ? t('posted') : t('draft')}</span></td>
                                 </tr>`).join('')}
                             </tbody>
-                        </table>` : '<p class="text-muted">Chưa có phiếu</p>'}
+                        </table>` : `<p class="text-muted">${t('noEntries')}</p>`}
                     </div>`;
             } catch (e) {
-                app.innerHTML = `<div class="alert alert-danger">Lỗi: ${e.message}</div>`;
+                app.innerHTML = `<div class="alert alert-danger">${t('error')}: ${e.message}</div>`;
             }
         }
 
         async function loadReports() {
             const app = document.getElementById('app');
             app.innerHTML = `
-                <h2 class="mb-4">Báo cáo Tài chính</h2>
+                <h2 class="mb-4" data-i18n="financialReports">${t('financialReports')}</h2>
                 <div class="row">
                     <div class="col-md-6"><div class="card card-stat p-4 text-center" style="cursor:pointer" onclick="loadBalanceSheet()">
                         <i class="bi bi-bar-chart-steps text-success fs-1"></i>
-                        <h5 class="mt-2">Bảng Cân đối</h5>
+                        <h5 class="mt-2">${t('balanceSheet')}</h5>
                     </div></div>
                     <div class="col-md-6"><div class="card card-stat p-4 text-center" style="cursor:pointer" onclick="loadTrialBalance()">
                         <i class="bi bi-list-check text-primary fs-1"></i>
-                        <h5 class="mt-2">Bảng Thử</h5>
+                        <h5 class="mt-2">${t('trialBalance')}</h5>
                     </div></div>
                 </div>
                 <div id="reportContent" class="mt-4"></div>`;
@@ -192,25 +354,25 @@
             const bs = res.data;
             document.getElementById('reportContent').innerHTML = `
                 <div class="table-container p-4">
-                    <h4 class="mb-4">Bảng Cân đối Kế toán</h4>
+                    <h4 class="mb-4">${t('balanceSheet')}</h4>
                     <div class="row">
                         <div class="col-md-6">
-                            <h5 class="text-primary">Tài sản</h5>
+                            <h5 class="text-primary">${t('assets')}</h5>
                             <table class="table table-sm">
                                 ${bs.assets.accounts.map(a => `<tr><td>${a.code} - ${a.name}</td><td class="text-end">${VND.format(a.balance)}</td></tr>`).join('')}
-                                <tr class="fw-bold border-top"><td>Tổng Tài sản</td><td class="text-end">${VND.format(bs.assets.total)}</td></tr>
+                                <tr class="fw-bold border-top"><td>${t('total')} ${t('assets')}</td><td class="text-end">${VND.format(bs.assets.total)}</td></tr>
                             </table>
                         </div>
                         <div class="col-md-6">
-                            <h5 class="text-danger">Nợ phải trả</h5>
+                            <h5 class="text-danger">${t('liabilities')}</h5>
                             <table class="table table-sm">
                                 ${bs.liabilities.accounts.map(a => `<tr><td>${a.code} - ${a.name}</td><td class="text-end">${VND.format(a.balance)}</td></tr>`).join('')}
-                                <tr class="fw-bold border-top"><td>Tổng Nợ</td><td class="text-end">${VND.format(bs.liabilities.total)}</td></tr>
+                                <tr class="fw-bold border-top"><td>${t('total')} ${t('liabilities')}</td><td class="text-end">${VND.format(bs.liabilities.total)}</td></tr>
                             </table>
-                            <h5 class="text-success mt-4">Vốn chủ sở hữu</h5>
+                            <h5 class="text-success mt-4">${t('equity')}</h5>
                             <table class="table table-sm">
                                 ${bs.equity.accounts.map(a => `<tr><td>${a.code} - ${a.name}</td><td class="text-end">${VND.format(a.balance)}</td></tr>`).join('')}
-                                <tr class="fw-bold border-top"><td>Tổng Vốn</td><td class="text-end">${VND.format(bs.equity.total)}</td></tr>
+                                <tr class="fw-bold border-top"><td>${t('total')} ${t('equity')}</td><td class="text-end">${VND.format(bs.equity.total)}</td></tr>
                             </table>
                         </div>
                     </div>
@@ -222,9 +384,9 @@
             const tb = res.data;
             document.getElementById('reportContent').innerHTML = `
                 <div class="table-container p-4">
-                    <h4 class="mb-4">Bảng Thử Cân đối</h4>
+                    <h4 class="mb-4">${t('trialBalance')}</h4>
                     <table class="table">
-                        <thead><tr><th>Mã</th><th>Tên</th><th class="text-end">Nợ</th><th class="text-end">Có</th></tr></thead>
+                        <thead><tr><th data-i18n="code">${t('code')}</th><th data-i18n="name">${t('name')}</th><th class="text-end" data-i18n="debit">${t('debit')}</th><th class="text-end" data-i18n="credit">${t('credit')}</th></tr></thead>
                         <tbody>
                             ${tb.accounts.map(a => `<tr>
                                 <td>${a.code}</td><td>${a.name}</td>
@@ -233,14 +395,15 @@
                             </tr>`).join('')}
                         </tbody>
                         <tfoot class="table-light fw-bold">
-                            <tr><td colspan="2">Tổng cộng</td><td class="text-end">${VND.format(tb.total_debits)}</td><td class="text-end">${VND.format(tb.total_credits)}</td></tr>
+                            <tr><td colspan="2">${t('total')}</td><td class="text-end">${VND.format(tb.total_debits)}</td><td class="text-end">${VND.format(tb.total_credits)}</td></tr>
                         </tfoot>
                     </table>
                     <div class="alert ${tb.is_balanced ? 'alert-success' : 'alert-danger'} mt-3">
-                        ${tb.is_balanced ? '✓ Cân bằng' : '✗ Không cân bằng'}
+                        ${tb.is_balanced ? '✓ ' + t('balanced') : '✗ ' + t('notBalanced')}
                     </div>
                 </div>`;
         }
     </script>
 </body>
+
 </html>

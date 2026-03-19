@@ -9,7 +9,7 @@ class Language(str, Enum):
 TRANSLATIONS = {
     "en": {
         # Navigation
-        "app_name": "Thuan's LedgerPro",
+        "app_name": "Thuận's LedgerPro",
         "dashboard": "Dashboard",
         "accounts": "Chart of Accounts",
         "journal": "Journal Entries",
@@ -124,7 +124,7 @@ TRANSLATIONS = {
     },
     "vi": {
         # Navigation
-        "app_name": "Thuan's LedgerPro",
+        "app_name": "Thuận's LedgerPro",
         "dashboard": "Bảng điều khiển",
         "accounts": "Danh sách Tài khoản",
         "journal": "Sổ Nhật ký",
