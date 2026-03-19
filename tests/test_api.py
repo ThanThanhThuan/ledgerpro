@@ -320,6 +320,150 @@ class TestDoubleEntryValidation:
         assert data['is_balanced'] == True
 
 
+class TestJournalEntryCreation:
+    def test_create_journal_entry_requires_lines(self, client, monkeypatch):
+        class MockConn:
+            def __init__(self):
+                pass
+
+            def execute(self, query, params=None):
+                return MockResult()
+
+            def commit(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        class MockResult:
+            def fetchone(self):
+                return None
+
+            def __iter__(self):
+                return iter([])
+
+        class MockEngine:
+            def connect(self):
+                return MockConn()
+
+        monkeypatch.setattr('api.index.get_engine', lambda: MockEngine())
+
+        response = client.post('/api/journal-entries', json={
+            "date": "2024-01-15",
+            "description": "Test",
+            "reference": "REF-001",
+            "lines": []
+        })
+        assert response.status_code == 400
+        assert 'line item' in response.get_json()['error'].lower()
+
+    def test_create_journal_entry_requires_balance(self, client, monkeypatch):
+        class MockConn:
+            def __init__(self):
+                pass
+
+            def execute(self, query, params=None):
+                return MockResult()
+
+            def commit(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        class MockResult:
+            def fetchone(self):
+                return None
+
+            def __iter__(self):
+                return iter([])
+
+        class MockEngine:
+            def connect(self):
+                return MockConn()
+
+        monkeypatch.setattr('api.index.get_engine', lambda: MockEngine())
+
+        response = client.post('/api/journal-entries', json={
+            "date": "2024-01-15",
+            "description": "Test",
+            "reference": "REF-001",
+            "lines": [
+                {"account_id": "1", "debit": 100, "credit": 0},
+                {"account_id": "2", "debit": 0, "credit": 50}
+            ]
+        })
+        assert response.status_code == 400
+        assert 'equal' in response.get_json()['error'].lower()
+
+    def test_create_journal_entry_success(self, client, monkeypatch):
+
+        class MockRow:
+            def __init__(self, data):
+                self._data = data
+
+            def __getitem__(self, key):
+                return self._data[key]
+
+            def __iter__(self):
+                return iter(self._data)
+
+        class MockConn:
+            def __init__(self):
+                self.call_count = 0
+
+            def execute(self, query, params=None):
+                self.call_count += 1
+                if self.call_count == 1:
+                    return MockResult(MockRow(['uuid-123', 'JE-001']))
+                return MockResult([])
+
+            def commit(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        class MockResult:
+            def __init__(self, row=None):
+                self._row = row
+
+            def fetchone(self):
+                return self._row
+
+            def __iter__(self):
+                return iter([])
+
+        class MockEngine:
+            def connect(self):
+                return MockConn()
+
+        monkeypatch.setattr('api.index.get_engine', lambda: MockEngine())
+
+        response = client.post('/api/journal-entries', json={
+            "date": "2024-01-15",
+            "description": "Test Entry",
+            "reference": "REF-001",
+            "lines": [
+                {"account_id": "acc-1", "debit": 1000, "credit": 0},
+                {"account_id": "acc-2", "debit": 0, "credit": 1000}
+            ]
+        })
+        assert response.status_code == 201
+        data = response.get_json()
+        assert 'id' in data
+        assert 'entry_number' in data
+
+
 class TestIndexRoute:
     def test_index_returns_html(self, client):
         response = client.get('/')
