@@ -77,13 +77,23 @@
             right: 20px;
             z-index: 1000;
         }
+
+        .lang-toggle .btn {
+            opacity: 0.6;
+            font-weight: bold;
+        }
+
+        .lang-toggle .btn.active,
+        .lang-toggle .btn:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 
 <body>
-    <div class="lang-toggle btn-group">
-        <button type="button" class="btn btn-sm btn-outline-light" id="lang-vi">VI</button>
-        <button type="button" class="btn btn-sm btn-outline-light" id="lang-en">EN</button>
+    <div class="lang-toggle btn-group btn-group-sm">
+        <button type="button" class="btn btn-dark" id="lang-vi">VI</button>
+        <button type="button" class="btn btn-outline-dark" id="lang-en">EN</button>
     </div>
 
     <nav class="sidebar">
