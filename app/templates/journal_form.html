@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}{{ entry_id and t('edit') or t('new') }} {{ trans.journal }} - {{ trans.app_name }}{% endblock %}
+{% block page_title %}{{ entry_id and t('edit') or t('new') }} {{ trans.journal }}{% endblock %}
+
+{% block actions %}
+<a href="/journal" class="btn btn-secondary">{{ trans.cancel }}</a>
+{% endblock %}
+
+{% block content %}
+<div class="table-container p-4">
+    <form id="entryForm" onsubmit="saveEntry(event)">
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <label class="form-label">{{ trans.date }} *</label>
+                <input type="date" class="form-control" id="entryDate" required value="{{ today }}">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">{{ trans.description }} *</label>
+                <input type="text" class="form-control" id="entryDescription" required placeholder="{{ trans.description }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">{{ trans.reference }}</label>
+                <input type="text" class="form-control" id="entryReference" placeholder="{{ trans.reference }}">
+            </div>
+        </div>
+
+        <h5 class="mb-3">{{ trans.line_items }}</h5>
+        <div class="table-responsive">
+            <table class="table table-bordered" id="lineItemsTable">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 35%">{{ trans.accounts }}</th>
+                        <th>{{ trans.memo }}</th>
+                        <th style="width: 15%">{{ trans.debit }}</th>
+                        <th style="width: 15%">{{ trans.credit }}</th>
+                        <th style="width: 5%" class="no-print"></th>
+                    </tr>
+                </thead>
+                <tbody id="lineItemsBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-8 text-end">
+                <strong>{{ trans.total_debits }}:</strong>
+                <span id="totalDebits">$0.00</span>
+                <br>
+                <strong>{{ trans.total_credits }}:</strong>
+                <span id="totalCredits">$0.00</span>
+                <br>
+                <strong>{{ trans.difference }}:</strong>
+                <span id="difference">$0.00</span>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between">
+            <button type="button" class="btn btn-outline-primary" onclick="addLineItem()">
+                <i class="bi bi-plus-lg"></i> {{ trans.add_line }}
+            </button>
+            <div>
+                <button type="submit" class="btn btn-success" id="saveBtn">
+                    <i class="bi bi-check-lg"></i> {{ trans.save_draft }}
+                </button>
+                <button type="button" class="btn btn-primary" id="postBtn" onclick="saveAndPost()">
+                    <i class="bi bi-check-all"></i> {{ trans.save_and_post }}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const entryId = {{ entry_id or 'null' }};
+let accounts = [];
+let lineItemCount = 0;
+
+async function loadAccounts() {
+    const res = await api.get('/accounts');
+    accounts = res.data.filter(a => a.is_active);
+}
+
+function renderAccountOptions() {
+    return accounts.map(a => 
+        `<option value="${a.id}" data-type="${a.account_type}">${a.code} - ${a.name} (${a.account_type})</option>`
+    ).join('');
+}
+
+function addLineItem(data = {}) {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>
+            <select class="form-select account-select" name="account_${lineItemCount}" required>
+                <option value="">${t('select_account')}</option>
+                ${renderAccountOptions()}
+            </select>
+        </td>
+        <td>
+            <input type="text" class="form-control" name="memo_${lineItemCount}" placeholder="${t('optional_memo')}" value="${data.memo || ''}">
+        </td>
+        <td>
+            <input type="number" class="form-control text-end debit-input" name="debit_${lineItemCount}" 
+                step="0.01" min="0" value="${data.debit || ''}" oninput="calculateTotals()">
+        </td>
+        <td>
+            <input type="number" class="form-control text-end credit-input" name="credit_${lineItemCount}" 
+                step="0.01" min="0" value="${data.credit || ''}" oninput="calculateTotals()">
+        </td>
+        <td class="no-print">
+            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeLine(this)">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </td>
+    `;
+    document.getElementById('lineItemsBody').appendChild(row);
+    lineItemCount++;
+
+    if (data.account_id) {
+        row.querySelector('.account-select').value = data.account_id;
+    }
+}
+
+function removeLine(btn) {
+    const rows = document.getElementById('lineItemsBody').querySelectorAll('tr');
+    if (rows.length > 2) {
+        btn.closest('tr').remove();
+        calculateTotals();
+    } else {
+        showToast(t('at_least_2_lines'), 'warning');
+    }
+}
+
+function calculateTotals() {
+    let totalDebits = 0;
+    let totalCredits = 0;
+
+    document.querySelectorAll('.debit-input').forEach(input => {
+        totalDebits += parseFloat(input.value) || 0;
+    });
+    document.querySelectorAll('.credit-input').forEach(input => {
+        totalCredits += parseFloat(input.value) || 0;
+    });
+
+    document.getElementById('totalDebits').textContent = formatCurrency(totalDebits);
+    document.getElementById('totalCredits').textContent = formatCurrency(totalCredits);
+
+    const diff = totalDebits - totalCredits;
+    const diffEl = document.getElementById('difference');
+    diffEl.textContent = formatCurrency(Math.abs(diff));
+    diffEl.className = diff === 0 ? 'text-success' : 'text-danger';
+
+    document.getElementById('saveBtn').disabled = diff !== 0;
+    document.getElementById('postBtn').disabled = diff !== 0;
+}
+
+function getLineItems() {
+    const rows = document.getElementById('lineItemsBody').querySelectorAll('tr');
+    return Array.from(rows).map((row, idx) => ({
+        account_id: row.querySelector('.account-select').value,
+        debit: parseFloat(row.querySelector('.debit-input').value) || 0,
+        credit: parseFloat(row.querySelector('.credit-input').value) || 0,
+        memo: row.querySelector(`[name="memo_${idx}"]`)?.value || '',
+    })).filter(item => item.account_id && (item.debit > 0 || item.credit > 0));
+}
+
+async function saveEntry(event, shouldPost = false) {
+    event.preventDefault();
+
+    const data = {
+        date: document.getElementById('entryDate').value,
+        description: document.getElementById('entryDescription').value,
+        reference: document.getElementById('entryReference').value || null,
+        line_items: getLineItems(),
+    };
+
+    if (data.line_items.length < 2) {
+        showToast(t('at_least_2_lines'), 'danger');
+        return;
+    }
+
+    try {
+        let response;
+        if (entryId) {
+            response = await api.put(`/journal-entries/${entryId}`, data);
+        } else {
+            response = await api.post('/journal-entries', data);
+        }
+
+        if (shouldPost) {
+            await api.post(`/journal-entries/${response.data.id}/post`);
+            showToast(t('entry_posted'));
+        } else {
+            showToast(t('entry_saved'));
+        }
+
+        window.location.href = '/journal';
+    } catch (err) {
+        showToast(err.response?.data?.detail || t('error'), 'danger');
+    }
+}
+
+async function saveAndPost() {
+    await saveEntry({ preventDefault: () => {} }, true);
+}
+
+async function loadEntry() {
+    if (!entryId) {
+        addLineItem();
+        addLineItem();
+        return;
+    }
+
+    try {
+        const res = await api.get(`/journal-entries/${entryId}`);
+        const entry = res.data;
+
+        document.getElementById('entryDate').value = entry.date;
+        document.getElementById('entryDescription').value = entry.description;
+        document.getElementById('entryReference').value = entry.reference || '';
+
+        if (!entry.is_posted) {
+            entry.line_items.forEach(item => {
+                addLineItem({
+                    account_id: item.account_id,
+                    debit: item.debit,
+                    credit: item.credit,
+                    memo: item.memo,
+                });
+            });
+        } else {
+            document.querySelectorAll('#entryForm input, #entryForm select').forEach(el => {
+                el.disabled = true;
+            });
+            document.getElementById('saveBtn').disabled = true;
+            document.getElementById('postBtn').disabled = true;
+        }
+    } catch (err) {
+        showToast(t('error'), 'danger');
+    }
+}
+
+await loadAccounts();
+await loadEntry();
+</script>
+{% endblock %}

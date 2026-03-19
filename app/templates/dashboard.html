@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}{{ trans.dashboard }} - {{ trans.app_name }}{% endblock %}
+{% block page_title %}{{ trans.dashboard }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card-stat bg-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">{{ trans.total_assets }}</h6>
+                        <h3 id="statAssets">$0.00</h3>
+                    </div>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-wallet2 text-primary fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stat bg-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">{{ trans.total_liabilities }}</h6>
+                        <h3 id="statLiabilities">$0.00</h3>
+                    </div>
+                    <div class="bg-danger bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-credit-card text-danger fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stat bg-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">{{ trans.total_equity }}</h6>
+                        <h3 id="statEquity">$0.00</h3>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-pie-chart text-success fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stat bg-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-2">{{ trans.net_income }}</h6>
+                        <h3 id="statNetIncome">$0.00</h3>
+                    </div>
+                    <div class="bg-info bg-opacity-10 p-3 rounded">
+                        <i class="bi bi-graph-up text-info fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="table-container p-4">
+            <h5 class="mb-4">{{ trans.recent_entries }}</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>{{ trans.date }}</th>
+                            <th>{{ trans.entry_number }}</th>
+                            <th>{{ trans.description }}</th>
+                            <th class="text-end">{{ trans.amount }}</th>
+                            <th>{{ trans.status }}</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentEntries">
+                        <tr><td colspan="5" class="text-center text-muted">{{ trans.loading }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <a href="/journal" class="btn btn-sm btn-outline-primary">{{ trans.view_all }}</a>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="table-container p-4">
+            <h5 class="mb-4">{{ trans.account_summary }}</h5>
+            <div id="accountSummary">
+                <p class="text-muted text-center">{{ trans.loading }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDashboard() {
+    try {
+        const [balanceRes, entriesRes, accountsRes] = await Promise.all([
+            api.get('/reports/balance-sheet'),
+            api.get('/journal-entries?limit=5'),
+            api.get('/accounts')
+        ]);
+
+        const balance = balanceRes.data;
+        document.getElementById('statAssets').textContent = formatCurrency(balance.assets.total);
+        document.getElementById('statLiabilities').textContent = formatCurrency(balance.liabilities.total);
+        document.getElementById('statEquity').textContent = formatCurrency(balance.equity.total);
+        
+        const netIncome = balance.equity.total - balance.liabilities.total - 
+            accountsRes.data.filter(a => a.account_type === 'equity').reduce((s, a) => s, 0);
+        document.getElementById('statNetIncome').textContent = formatCurrency(netIncome);
+
+        const entries = entriesRes.data.entries;
+        const tbody = document.getElementById('recentEntries');
+        if (entries.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">' + t('no_entries') + '</td></tr>';
+        } else {
+            tbody.innerHTML = entries.map(e => `
+                <tr>
+                    <td>${formatDate(e.date)}</td>
+                    <td><a href="/journal/${e.id}">${e.entry_number}</a></td>
+                    <td>${e.description}</td>
+                    <td class="text-end">${formatCurrency(e.total_debits)}</td>
+                    <td>
+                        <span class="badge ${e.is_posted ? 'bg-success' : 'bg-warning'}">
+                            ${e.is_posted ? t('posted') : t('draft')}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        const typeCounts = {};
+        accountsRes.data.forEach(a => {
+            typeCounts[a.account_type] = (typeCounts[a.account_type] || 0) + 1;
+        });
+        const summary = document.getElementById('accountSummary');
+        summary.innerHTML = Object.entries(typeCounts).map(([type, count]) => `
+            <div class="d-flex justify-content-between mb-2">
+                <span class="badge account-type-${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                <span>${count} ${t('entries_count', '', count=count).replace('{count}', count)}</span>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+loadDashboard();
+</script>
+{% endblock %}

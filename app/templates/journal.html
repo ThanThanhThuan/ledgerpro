@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}{{ trans.journal }} - {{ trans.app_name }}{% endblock %}
+{% block page_title %}{{ trans.journal }}{% endblock %}
+
+{% block actions %}
+<button class="btn btn-primary" onclick="window.location.href='/journal/new'">
+    <i class="bi bi-plus-lg"></i> {{ trans.new_entry }}
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="table-container p-4">
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label class="form-label">{{ trans.start_date }}</label>
+            <input type="date" class="form-control" id="startDate" onchange="loadEntries()">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">{{ trans.end_date }}</label>
+            <input type="date" class="form-control" id="endDate" onchange="loadEntries()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">{{ trans.status }}</label>
+            <select class="form-select" id="statusFilter" onchange="loadEntries()">
+                <option value="">{{ trans.all }}</option>
+                <option value="true">{{ trans.posted }}</option>
+                <option value="false">{{ trans.draft }}</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>{{ trans.date }}</th>
+                    <th>{{ trans.entry_number }}</th>
+                    <th>{{ trans.description }}</th>
+                    <th>{{ trans.reference }}</th>
+                    <th class="text-end">{{ trans.debit }}</th>
+                    <th class="text-end">{{ trans.credit }}</th>
+                    <th>{{ trans.status }}</th>
+                    <th class="no-print">{{ trans.actions }}</th>
+                </tr>
+            </thead>
+            <tbody id="entriesTable">
+                <tr><td colspan="8" class="text-center text-muted">{{ trans.loading }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <nav>
+        <ul class="pagination justify-content-center" id="pagination"></ul>
+    </nav>
+</div>
+
+<div class="modal fade" id="viewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ trans.entry_number }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="viewModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ trans.close }}</button>
+                <button type="button" class="btn btn-outline-primary no-print" onclick="window.print()">
+                    <i class="bi bi-printer"></i> {{ trans.print }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+const pageSize = 20;
+
+async function loadEntries(page = 1) {
+    currentPage = page;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const status = document.getElementById('statusFilter').value;
+
+    let url = `/journal-entries?skip=${(page-1)*pageSize}&limit=${pageSize}`;
+    if (startDate) url += `&start_date=${startDate}`;
+    if (endDate) url += `&end_date=${endDate}`;
+    if (status) url += `&posted_only=${status}`;
+
+    try {
+        const res = await api.get(url);
+        const { entries, total } = res.data;
+        const tbody = document.getElementById('entriesTable');
+
+        if (entries.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">' + t('no_entries') + '</td></tr>';
+            document.getElementById('pagination').innerHTML = '';
+            return;
+        }
+
+        tbody.innerHTML = entries.map(e => `
+            <tr>
+                <td>${formatDate(e.date)}</td>
+                <td><a href="#" onclick="viewEntry('${e.id}'); return false;">${e.entry_number}</a></td>
+                <td>${e.description}</td>
+                <td>${e.reference || '-'}</td>
+                <td class="text-end">${formatCurrency(e.total_debits)}</td>
+                <td class="text-end">${formatCurrency(e.total_credits)}</td>
+                <td>
+                    <span class="badge ${e.is_posted ? 'bg-success' : 'bg-warning'}">
+                        ${e.is_posted ? t('posted') : t('draft')}
+                    </span>
+                </td>
+                <td class="no-print">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="viewEntry('${e.id}')">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        ${!e.is_posted ? `
+                            <button class="btn btn-outline-success" onclick="postEntry('${e.id}')">
+                                <i class="bi bi-check-lg"></i>
+                            </button>
+                            <a href="/journal/${e.id}/edit" class="btn btn-outline-secondary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button class="btn btn-outline-danger" onclick="deleteEntry('${e.id}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        ` : `
+                            <button class="btn btn-outline-warning" onclick="unpostEntry('${e.id}')">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                        `}
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+
+        const totalPages = Math.ceil(total / pageSize);
+        renderPagination(totalPages);
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function renderPagination(totalPages) {
+    const pagination = document.getElementById('pagination');
+    let html = '';
+
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+
+    if (currentPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="loadEntries(${currentPage-1}); return false;">Previous</a></li>`;
+    }
+
+    for (let i = 1; i <= totalPages; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="loadEntries(${i}); return false;">${i}</a>
+        </li>`;
+    }
+
+    if (currentPage < totalPages) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="loadEntries(${currentPage+1}); return false;">Next</a></li>`;
+    }
+
+    pagination.innerHTML = html;
+}
+
+async function viewEntry(id) {
+    try {
+        const res = await api.get(`/journal-entries/${id}`);
+        const entry = res.data;
+
+        document.getElementById('viewModalBody').innerHTML = `
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <strong>${t('entry_number')}:</strong> ${entry.entry_number}
+                </div>
+                <div class="col-md-4">
+                    <strong>${t('date')}:</strong> ${formatDate(entry.date)}
+                </div>
+                <div class="col-md-4">
+                    <strong>${t('status')}:</strong> 
+                    <span class="badge ${entry.is_posted ? 'bg-success' : 'bg-warning'}">
+                        ${entry.is_posted ? t('posted') : t('draft')}
+                    </span>
+                </div>
+            </div>
+            <div class="mb-3">
+                <strong>${t('description')}:</strong> ${entry.description}
+            </div>
+            <div class="mb-3">
+                <strong>${t('reference')}:</strong> ${entry.reference || '-'}
+            </div>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>${t('account_code')}</th>
+                        <th>${t('memo')}</th>
+                        <th class="text-end">${t('debit')}</th>
+                        <th class="text-end">${t('credit')}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${entry.line_items.map(item => `
+                        <tr>
+                            <td>${item.account_code} - ${item.account_name}</td>
+                            <td>${item.memo || ''}</td>
+                            <td class="text-end">${item.debit > 0 ? formatCurrency(item.debit) : ''}</td>
+                            <td class="text-end">${item.credit > 0 ? formatCurrency(item.credit) : ''}</td>
+                        </tr>
+                    `).join('')}
+                    <tr class="table-light fw-bold">
+                        <td colspan="2">${t('totals')}</td>
+                        <td class="text-end">${formatCurrency(entry.total_debits)}</td>
+                        <td class="text-end">${formatCurrency(entry.total_credits)}</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+
+        new bootstrap.Modal(document.getElementById('viewModal')).show();
+    } catch (err) {
+        showToast(t('error'), 'danger');
+    }
+}
+
+async function postEntry(id) {
+    try {
+        await api.post(`/journal-entries/${id}/post`);
+        showToast(t('entry_posted'));
+        loadEntries(currentPage);
+    } catch (err) {
+        showToast(err.response?.data?.detail || t('error'), 'danger');
+    }
+}
+
+async function unpostEntry(id) {
+    try {
+        await api.post(`/journal-entries/${id}/unpost`);
+        showToast(t('entry_saved'));
+        loadEntries(currentPage);
+    } catch (err) {
+        showToast(err.response?.data?.detail || t('error'), 'danger');
+    }
+}
+
+async function deleteEntry(id) {
+    showConfirm(t('confirm_delete'), async () => {
+        try {
+            await api.delete(`/journal-entries/${id}`);
+            showToast(t('entry_deleted'));
+            loadEntries(currentPage);
+        } catch (err) {
+            showToast(err.response?.data?.detail || t('error'), 'danger');
+        }
+    });
+}
+
+loadEntries();
+</script>
+{% endblock %}

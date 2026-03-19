@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+
+{% block title %}{{ trans.accounts }} - {{ trans.app_name }}{% endblock %}
+{% block page_title %}{{ trans.accounts }}{% endblock %}
+
+{% block actions %}
+<button class="btn btn-primary" onclick="showAccountModal()">
+    <i class="bi bi-plus-lg"></i> {{ trans.add_account }}
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="table-container p-4">
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <select class="form-select" id="filterType" onchange="loadAccounts()">
+                <option value="">{{ trans.all_types }}</option>
+                <option value="asset">{{ trans.asset }}</option>
+                <option value="liability">{{ trans.liability }}</option>
+                <option value="equity">{{ trans.equity }}</option>
+                <option value="revenue">{{ trans.revenue }}</option>
+                <option value="expense">{{ trans.expense }}</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" class="form-control" placeholder="{{ trans.search_accounts }}" id="searchInput" oninput="loadAccounts()">
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>{{ trans.account_code }}</th>
+                    <th>{{ trans.account_name }}</th>
+                    <th>{{ trans.account_type }}</th>
+                    <th class="text-end">{{ trans.balance }}</th>
+                    <th>{{ trans.status }}</th>
+                    <th class="no-print">{{ trans.actions }}</th>
+                </tr>
+            </thead>
+            <tbody id="accountsTable">
+                <tr><td colspan="6" class="text-center text-muted">{{ trans.loading }}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="accountModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accountModalTitle">{{ trans.add_account }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="accountForm" onsubmit="saveAccount(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="accountId">
+                    <div class="mb-3">
+                        <label class="form-label">{{ trans.account_code }}</label>
+                        <input type="text" class="form-control" id="accountCode" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ trans.account_name }}</label>
+                        <input type="text" class="form-control" id="accountName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ trans.account_type }}</label>
+                        <select class="form-select" id="accountType" required>
+                            <option value="asset">{{ trans.asset }}</option>
+                            <option value="liability">{{ trans.liability }}</option>
+                            <option value="equity">{{ trans.equity }}</option>
+                            <option value="revenue">{{ trans.revenue }}</option>
+                            <option value="expense">{{ trans.expense }}</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ trans.parent_account }}</label>
+                        <select class="form-select" id="parentAccount">
+                            <option value="">{{ trans.none }}</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ trans.cancel }}</button>
+                    <button type="submit" class="btn btn-primary">{{ trans.save }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let accounts = [];
+
+async function loadAccounts() {
+    try {
+        const res = await api.get('/accounts?include_inactive=true');
+        accounts = res.data;
+        
+        const filterType = document.getElementById('filterType').value;
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        
+        let filtered = accounts.filter(a => {
+            if (filterType && a.account_type !== filterType) return false;
+            if (search && !a.code.toLowerCase().includes(search) && !a.name.toLowerCase().includes(search)) return false;
+            return true;
+        });
+
+        const tbody = document.getElementById('accountsTable');
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">{{ trans.no_entries }}</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = await Promise.all(filtered.map(async a => {
+            const detail = await api.get(`/accounts/${a.id}`);
+            const balance = detail.data.balance || 0;
+            return `
+                <tr>
+                    <td><a href="/reports/account/${a.id}">${a.code}</a></td>
+                    <td>${a.name}</td>
+                    <td><span class="badge account-type-${a.account_type}">${a.account_type}</span></td>
+                    <td class="text-end">${formatCurrency(balance)}</td>
+                    <td>${a.is_active ? '<span class="badge bg-success">{{ trans.active }}</span>' : '<span class="badge bg-secondary">{{ trans.inactive }}</span>'}</td>
+                    <td class="no-print">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editAccount('${a.id}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount('${a.id}')" ${!a.is_active ? 'disabled' : ''}>
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        })).then(htmls => htmls.join(''));
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function showAccountModal(accountId = null) {
+    const modal = new bootstrap.Modal(document.getElementById('accountModal'));
+    document.getElementById('accountForm').reset();
+    document.getElementById('accountId').value = '';
+    document.getElementById('accountModalTitle').textContent = t('add_account');
+
+    const parentSelect = document.getElementById('parentAccount');
+    parentSelect.innerHTML = '<option value="">{{ trans.none }}</option>';
+    accounts.forEach(a => {
+        parentSelect.innerHTML += `<option value="${a.id}">${a.code} - ${a.name}</option>`;
+    });
+
+    if (accountId) {
+        const acc = accounts.find(a => a.id === accountId);
+        if (acc) {
+            document.getElementById('accountId').value = acc.id;
+            document.getElementById('accountCode').value = acc.code;
+            document.getElementById('accountName').value = acc.name;
+            document.getElementById('accountType').value = acc.account_type;
+            document.getElementById('parentAccount').value = acc.parent_id || '';
+            document.getElementById('accountModalTitle').textContent = t('edit_account');
+        }
+    }
+
+    modal.show();
+}
+
+async function editAccount(id) {
+    await showAccountModal(id);
+}
+
+async function saveAccount(e) {
+    e.preventDefault();
+    const id = document.getElementById('accountId').value;
+    const data = {
+        code: document.getElementById('accountCode').value,
+        name: document.getElementById('accountName').value,
+        account_type: document.getElementById('accountType').value,
+        parent_id: document.getElementById('parentAccount').value || null,
+    };
+
+    try {
+        if (id) {
+            await api.put(`/accounts/${id}`, data);
+            showToast(t('account_saved'));
+        } else {
+            await api.post('/accounts', data);
+            showToast(t('account_saved'));
+        }
+        bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
+        loadAccounts();
+    } catch (err) {
+        showToast(err.response?.data?.detail || t('error'), 'danger');
+    }
+}
+
+async function deleteAccount(id) {
+    showConfirm(t('confirm_delete'), async () => {
+        try {
+            await api.delete(`/accounts/${id}`);
+            showToast(t('account_deleted'));
+            loadAccounts();
+        } catch (err) {
+            showToast(err.response?.data?.detail || t('error'), 'danger');
+        }
+    });
+}
+
+loadAccounts();
+</script>
+{% endblock %}

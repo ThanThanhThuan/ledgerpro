@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}{{ trans.reports }} - {{ trans.app_name }}{% endblock %}
+{% block page_title %}{{ trans.reports }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card-stat bg-white h-100" style="cursor: pointer;" onclick="generateReport('trial-balance')">
+            <div class="card-body text-center">
+                <i class="bi bi-list-check text-primary fs-1"></i>
+                <h5 class="mt-3">{{ trans.trial_balance }}</h5>
+                <p class="text-muted small">{{ trans.trial_balance }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stat bg-white h-100" style="cursor: pointer;" onclick="generateReport('balance-sheet')">
+            <div class="card-body text-center">
+                <i class="bi bi-bar-chart-steps text-success fs-1"></i>
+                <h5 class="mt-3">{{ trans.balance_sheet }}</h5>
+                <p class="text-muted small">{{ trans.balance_sheet }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stat bg-white h-100" style="cursor: pointer;" onclick="generateReport('income-statement')">
+            <div class="card-body text-center">
+                <i class="bi bi-graph-up text-info fs-1"></i>
+                <h5 class="mt-3">{{ trans.income_statement }}</h5>
+                <p class="text-muted small">{{ trans.income_statement }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stat bg-white h-100" style="cursor: pointer;" onclick="generateReport('general-ledger')">
+            <div class="card-body text-center">
+                <i class="bi bi-book text-warning fs-1"></i>
+                <h5 class="mt-3">{{ trans.general_ledger }}</h5>
+                <p class="text-muted small">{{ trans.general_ledger }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="table-container p-4" id="reportContainer">
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-file-earmark-text fs-1"></i>
+        <p class="mt-3">{{ trans.reports }}</p>
+    </div>
+</div>
+
+<div class="modal fade" id="reportOptionsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reportModalTitle">{{ trans.generate_report }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">{{ trans.as_of_date }}</label>
+                    <input type="date" class="form-control" id="reportDate" value="{{ today }}">
+                </div>
+                <div id="dateRangeOptions" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">{{ trans.start_date }}</label>
+                        <input type="date" class="form-control" id="reportStartDate">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ trans.end_date }}</label>
+                        <input type="date" class="form-control" id="reportEndDate" value="{{ today }}">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ trans.cancel }}</button>
+                <button type="button" class="btn btn-primary" id="generateReportBtn">
+                    <i class="bi bi-file-earmark"></i> {{ trans.generate_report }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentReport = null;
+
+function generateReport(type) {
+    currentReport = type;
+    const modal = new bootstrap.Modal(document.getElementById('reportOptionsModal'));
+
+    const titleMap = {
+        'trial-balance': t('trial_balance'),
+        'balance-sheet': t('balance_sheet'),
+        'income-statement': t('income_statement'),
+        'general-ledger': t('general_ledger')
+    };
+    document.getElementById('reportModalTitle').textContent = titleMap[type];
+
+    const dateRangeOptions = document.getElementById('dateRangeOptions');
+    dateRangeOptions.style.display = type === 'income-statement' ? 'block' : 'none';
+
+    document.getElementById('generateReportBtn').onclick = () => {
+        modal.hide();
+        loadReport();
+    };
+
+    modal.show();
+}
+
+async function loadReport() {
+    const container = document.getElementById('reportContainer');
+    container.innerHTML = '<div class="text-center py-5"><div class="spinner-border"></div></div>';
+
+    try {
+        let url, html;
+
+        if (currentReport === 'trial-balance') {
+            const date = document.getElementById('reportDate').value;
+            const res = await api.get(`/reports/trial-balance?as_of_date=${date}`);
+            const data = res.data;
+
+            html = `
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>${t('trial_balance')}</h4>
+                    <div>
+                        <span class="badge ${data.is_balanced ? 'bg-success' : 'bg-danger'}">
+                            ${data.is_balanced ? t('balanced') : t('unbalanced')}
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="window.print()">
+                            <i class="bi bi-printer"></i> ${t('print')}
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted">${t('as_of_date')}: ${formatDate(data.as_of_date)}</p>
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>${t('account_code')}</th>
+                            <th>{{ trans.account_name }}</th>
+                            <th class="text-end">${t('debit')}</th>
+                            <th class="text-end">${t('credit')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.accounts.map(acc => `
+                            <tr>
+                                <td>${acc.code}</td>
+                                <td>${acc.name}</td>
+                                <td class="text-end">${acc.debit_balance > 0 ? formatCurrency(acc.debit_balance) : ''}</td>
+                                <td class="text-end">${acc.credit_balance > 0 ? formatCurrency(acc.credit_balance) : ''}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="2">${t('totals')}</td>
+                            <td class="text-end">${formatCurrency(data.total_debits)}</td>
+                            <td class="text-end">${formatCurrency(data.total_credits)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            `;
+        } else if (currentReport === 'balance-sheet') {
+            const date = document.getElementById('reportDate').value;
+            const res = await api.get(`/reports/balance-sheet?as_of_date=${date}`);
+            const data = res.data;
+
+            html = `
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>${t('balance_sheet')}</h4>
+                    <div>
+                        <span class="badge ${data.is_balanced ? 'bg-success' : 'bg-danger'}">
+                            ${data.is_balanced ? t('balanced') : t('unbalanced')}
+                        </span>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="window.print()">
+                            <i class="bi bi-printer"></i> ${t('print')}
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted">${t('as_of_date')}: ${formatDate(data.as_of_date)}</p>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="text-primary">${t('assets')}</h5>
+                        <table class="table table-sm">
+                            ${data.assets.accounts.map(acc => `
+                                <tr>
+                                    <td>${acc.code} - ${acc.name}</td>
+                                    <td class="text-end">${formatCurrency(acc.balance)}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="fw-bold border-top">
+                                <td>${t('totals')} ${t('assets')}</td>
+                                <td class="text-end">${formatCurrency(data.assets.total)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="text-danger">${t('liabilities')}</h5>
+                        <table class="table table-sm">
+                            ${data.liabilities.accounts.map(acc => `
+                                <tr>
+                                    <td>${acc.code} - ${acc.name}</td>
+                                    <td class="text-end">${formatCurrency(acc.balance)}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="fw-bold border-top">
+                                <td>${t('totals')} ${t('liabilities')}</td>
+                                <td class="text-end">${formatCurrency(data.liabilities.total)}</td>
+                            </tr>
+                        </table>
+
+                        <h5 class="text-success">{{ trans.equity }}</h5>
+                        <table class="table table-sm">
+                            ${data.equity.accounts.map(acc => `
+                                <tr>
+                                    <td>${acc.code === 'NET_INCOME' ? '' : acc.code + ' - '}${acc.name}</td>
+                                    <td class="text-end">${formatCurrency(acc.balance)}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="fw-bold border-top">
+                                <td>${t('totals')} {{ trans.equity }}</td>
+                                <td class="text-end">${formatCurrency(data.equity.total)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <table class="table table-bordered mt-4" style="max-width: 300px;">
+                    <tr class="table-light">
+                        <th>${t('total_liabilities_equity')}</th>
+                        <td class="text-end fw-bold">${formatCurrency(data.total_liabilities_and_equity)}</td>
+                    </tr>
+                </table>
+            `;
+        } else if (currentReport === 'income-statement') {
+            const startDate = document.getElementById('reportStartDate').value;
+            const endDate = document.getElementById('reportEndDate').value;
+
+            if (!startDate) {
+                showToast(t('start_date') + ' ' + t('error'), 'warning');
+                return;
+            }
+
+            const res = await api.get(`/reports/income-statement?start_date=${startDate}&end_date=${endDate}`);
+            const data = res.data;
+
+            html = `
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>${t('income_statement')}</h4>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                        <i class="bi bi-printer"></i> ${t('print')}
+                    </button>
+                </div>
+                <p class="text-muted">${t('for_period')} ${formatDate(data.start_date)} ${t('to')} ${formatDate(data.end_date)}</p>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="text-success">${t('revenue')}</h5>
+                        <table class="table table-sm">
+                            ${data.revenue.accounts.length === 0 ? '<tr><td class="text-muted">-</td><td></td></tr>' : ''}
+                            ${data.revenue.accounts.map(acc => `
+                                <tr>
+                                    <td>${acc.code} - ${acc.name}</td>
+                                    <td class="text-end">${formatCurrency(acc.balance)}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="fw-bold border-top">
+                                <td>${t('totals')} ${t('revenue')}</td>
+                                <td class="text-end">${formatCurrency(data.revenue.total)}</td>
+                            </tr>
+                        </table>
+
+                        <h5 class="text-danger">{{ trans.expense }}</h5>
+                        <table class="table table-sm">
+                            ${data.expenses.accounts.length === 0 ? '<tr><td class="text-muted">-</td><td></td></tr>' : ''}
+                            ${data.expenses.accounts.map(acc => `
+                                <tr>
+                                    <td>${acc.code} - ${acc.name}</td>
+                                    <td class="text-end">${formatCurrency(acc.balance)}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="fw-bold border-top">
+                                <td>${t('totals')} {{ trans.expense }}</td>
+                                <td class="text-end">${formatCurrency(data.expenses.total)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <table class="table table-bordered mt-4" style="max-width: 300px;">
+                    <tr class="table-light">
+                        <th>${t('gross_profit')}</th>
+                        <td class="text-end">${formatCurrency(data.gross_profit)}</td>
+                    </tr>
+                    <tr class="fw-bold">
+                        <th>${t('net_income')}</th>
+                        <td class="text-end ${data.net_income >= 0 ? 'text-success' : 'text-danger'}">
+                            ${formatCurrency(data.net_income)}
+                        </td>
+                    </tr>
+                </table>
+            `;
+        } else if (currentReport === 'general-ledger') {
+            const date = document.getElementById('reportDate').value;
+            const res = await api.get(`/reports/general-ledger?end_date=${date}`);
+            const data = res.data;
+
+            html = `
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4>${t('general_ledger')}</h4>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                        <i class="bi bi-printer"></i> ${t('print')}
+                    </button>
+                </div>
+                <p class="text-muted">${t('as_of_date')}: ${formatDate(date)}</p>
+            `;
+
+            for (const ledger of data.ledgers) {
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <strong>${ledger.account_code}</strong> - ${ledger.account_name}
+                            <span class="badge account-type-${ledger.account_type} float-end">${ledger.account_type}</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>${t('date')}</th>
+                                        <th>${t('entry_number')}</th>
+                                        <th>${t('description')}</th>
+                                        <th class="text-end">${t('debit')}</th>
+                                        <th class="text-end">${t('credit')}</th>
+                                        <th class="text-end">${t('balance')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ledger.opening_balance !== 0 ? `
+                                        <tr class="text-muted">
+                                            <td colspan="5">${t('opening_balance')}</td>
+                                            <td class="text-end">${formatCurrency(ledger.opening_balance)}</td>
+                                        </tr>
+                                    ` : ''}
+                                    ${ledger.entries.map(e => `
+                                        <tr>
+                                            <td>${formatDate(e.date)}</td>
+                                            <td>${e.entry_number}</td>
+                                            <td>${e.description}</td>
+                                            <td class="text-end">${e.debit > 0 ? formatCurrency(e.debit) : ''}</td>
+                                            <td class="text-end">${e.credit > 0 ? formatCurrency(e.credit) : ''}</td>
+                                            <td class="text-end">${formatCurrency(e.balance)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="3" class="text-end"><strong>${t('totals')}</strong></td>
+                                        <td class="text-end">${formatCurrency(ledger.total_debits)}</td>
+                                        <td class="text-end">${formatCurrency(ledger.total_credits)}</td>
+                                        <td class="text-end"><strong>${formatCurrency(ledger.closing_balance)}</strong></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                ${t('error')}: ${err.response?.data?.detail || err.message}
+            </div>
+        `;
+    }
+}
+</script>
+{% endblock %}
