@@ -156,25 +156,8 @@ def trial_balance():
 
 @app.route('/')
 def index():
-    html = """<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LedgerPro</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container py-5 text-center">
-        <h1>LedgerPro</h1>
-        <p class="lead">Double Entry Accounting System</p>
-        <div class="alert alert-success">
-            <strong>API is running!</strong><br>
-            Database: """ + ("Connected" if DATABASE_URL else "NOT CONNECTED") + """
-        </div>
-    </div>
-</body>
-</html>"""
+    with open('index.html', 'r', encoding='utf-8') as f:
+        html = f.read()
     return Response(html, mimetype='text/html')
 
 if __name__ == '__main__':
