@@ -73,6 +73,52 @@ def journal_entries():
             } for r in result]
             return jsonify({"entries": entries, "total": len(entries)})
 
+        if request.method == 'POST':
+            data = request.json
+            date = data.get('date')
+            description = data.get('description')
+            reference = data.get('reference')
+            lines = data.get('lines', [])
+            
+            if not lines:
+                return jsonify({"error": "At least one line item required"}), 400
+            
+            total_debit = sum(float(l.get('debit', 0)) for l in lines)
+            total_credit = sum(float(l.get('credit', 0)) for l in lines)
+            
+            if abs(total_debit - total_credit) > 0.01:
+                return jsonify({"error": f"Debits ({total_debit}) must equal Credits ({total_credit})"}), 400
+            
+            entry_result = conn.execute(text("""
+                INSERT INTO journal_entries (entry_number, date, description, reference)
+                VALUES (
+                    'JE-' || COALESCE(
+                        (SELECT MAX(CAST(SUBSTRING(entry_number FROM 4) AS INTEGER)) 
+                         FROM journal_entries WHERE entry_number LIKE 'JE-%'), 
+                        0) + 1,
+                    :date, :description, :reference
+                )
+                RETURNING id::text, entry_number
+            """), {"date": date, "description": description, "reference": reference})
+            entry_row = entry_result.fetchone()
+            entry_id = entry_row[0]
+            entry_number = entry_row[1]
+            
+            for line in lines:
+                conn.execute(text("""
+                    INSERT INTO line_items (journal_entry_id, account_id, debit, credit, memo)
+                    VALUES (:entry_id, :account_id, :debit, :credit, :memo)
+                """), {
+                    "entry_id": entry_id,
+                    "account_id": line.get('account_id'),
+                    "debit": float(line.get('debit', 0)),
+                    "credit": float(line.get('credit', 0)),
+                    "memo": line.get('memo', '')
+                })
+            
+            conn.commit()
+            return jsonify({"id": entry_id, "entry_number": entry_number}), 201
+
 @app.route('/api/reports/balance-sheet')
 def balance_sheet():
     engine = get_engine()
